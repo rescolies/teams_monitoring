@@ -1,7 +1,7 @@
+import os
 import time
 import winsound
-from pywinauto import Application
-from pywinauto import Desktop
+from pywinauto import Application, Desktop
 
 def iniciar_teams():
     # Abre Microsoft Teams (asegúrate de que el atajo esté en la ubicación especificada)
@@ -15,9 +15,12 @@ def sonar_alarma():
 
 def verificar_notificaciones():
     try:
+        # Conéctate a la aplicación de Teams
         app = Application(backend="uia").connect(path="Teams.exe")
         teams_window = app.window(title_re=".*Microsoft Teams")
-        teams_window.set_focus()
+
+        # Imprime la estructura de la ventana para depuración
+        print(teams_window.print_control_identifiers())
 
         # Verifica si hay notificaciones de mensajes nuevos
         notifications = teams_window.child_window(title="Activity", control_type="Pane")
