@@ -1,39 +1,58 @@
-import asyncio
-from playsound import playsound
-from winrt.windows.ui.notifications.management import UserNotificationListener, UserNotificationListenerAccessStatus
+import time
+import os
+import winsound
+from pywinauto import Application, Desktop
+from watchdog.observers import Observer
+from watchdog.events import FileSystemEventHandler
 
-async def get_teams_notifications():
-    listener = UserNotificationListener.get_current()
-    access_status = await listener.request_access_async()
+class NotificationHandler(FileSystemEventHandler):
+    def __init__(self, directory):
+        self.directory = directory
 
-    if access_status != UserNotificationListenerAccessStatus.ALLOWED:
-        print("Acceso denegado a las notificaciones del sistema")
-        return False
+    def on_modified(self, event):
+        if event.src_path.startswith(self.directory):
+            print("Cambio detectado en el directorio de Teams")
+            self.check_teams_notifications()
 
-    # Llamar a get_notifications_async y manejar la tarea correctamente
-    notifications = await listener.get_notifications_async().as_future()
+    def on_created(self, event):
+        self.on_modified(event)
 
-    for notification in notifications:
-        app_info = notification.app_info
-        if "Teams" in app_info.display_name:
-            return True
-
-    return False
-
-async def sonar_alarma():
-    while True:
+    def check_teams_notifications(self):
         try:
-            if await get_teams_notifications():
-                playsound('alarma.mp3')
-                await asyncio.sleep(60)  # Espera 60 segundos antes de volver a comprobar
+            app = Application(backend="uia").connect(path="Teams.exe")
+            teams_window = app.window(title_re=".*Microsoft Teams")
+            teams_window.set_focus()
+
+            # Simula una búsqueda para activar notificaciones
+            search_box = teams_window.child_window(auto_id="searchInputField", control_type="Edit")
+            search_box.click_input()
+            search_box.type_keys("Nuevo mensaje")
+            time.sleep(2)  # Espera para que las notificaciones aparezcan
+
+            notifications_pane = teams_window.child_window(title="Activity", control_type="List")
+            for item in notifications_pane.descendants():
+                if "unread" in item.window_text().lower():
+                    print(f"Nueva notificación de Teams detectada: {item.window_text()}")
+                    winsound.Beep(1000, 1000)  # Emite un beep de 1 segundo
+                    break
         except Exception as e:
-            print(f"Error al obtener notificaciones: {e}")
-        await asyncio.sleep(1)  # Evita bloquear el bucle de eventos
+            print(f"Error al verificar notificaciones de Teams: {e}")
 
-# Programa principal
-async def main():
-    await sonar_alarma()
+def monitor_teams_directory(directory):
+    event_handler = NotificationHandler(directory)
+    observer = Observer()
+    observer.schedule(event_handler, path=directory, recursive=False)
+    observer.start()
+    try:
+        while True:
+            print("Monitoreando directorio de Teams...")
+            time.sleep(10)
+    except KeyboardInterrupt:
+        observer.stop()
+    observer.join()
 
-# Ejecuta el programa principal
-if __name__ == "__main__":
-    asyncio.run(main())
+# Directorio que deseas monitorear
+teams_directory = "C:\\Users\\TuUsuario\\AppData\\Roaming\\Microsoft\\Teams\\"
+
+# Comienza a monitorear el directorio
+monitor_teams_directory(teams_directory)
